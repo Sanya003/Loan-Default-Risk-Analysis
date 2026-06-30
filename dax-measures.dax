@@ -1,0 +1,95 @@
+// ============================================================
+// Loan Default Risk Analysis — Full DAX Measure List
+// ============================================================
+
+// ---------- Calculated Columns ----------
+
+Year = YEAR('Loan_default'[Loan_Date_MM_DD_YYYY].[Date])
+ 
+Income Bracket =
+SWITCH(
+    TRUE(),
+    'Loan_default'[Income] < 30000, "Low Income",
+    'Loan_default'[Income] >= 30000 && 'Loan_default'[Income] < 60000, "Medium Income",
+    'Loan_default'[Income] >= 60000, "High Income"
+)
+ 
+Credit Score Bins =
+IF('Loan_default'[CreditScore] <= 400, "Very Low",
+    IF('Loan_default'[CreditScore] <= 450, "Low",
+        IF('Loan_default'[CreditScore] <= 650, "Medium", "High")))
+ 
+Age Groups =
+IF('Loan_default'[Age] <= 19, "Teen",
+    IF('Loan_default'[Age] <= 39, "Adult",
+        IF('Loan_default'[Age] <= 59, "Middle-Aged Adult", "Senior Citizens")))
+
+ 
+// ---------- Trend & Time Intelligence ----------
+
+YOY Default Loans Change =
+DIVIDE(
+    CALCULATE(COUNTROWS(FILTER('Loan_default', 'Loan_default'[Default] = TRUE())),
+        'Loan_default'[Year] = YEAR(MAX('Loan_default'[Loan_Date_MM_DD_YYYY]))) -
+    CALCULATE(COUNTROWS(FILTER('Loan_default', 'Loan_default'[Default] = TRUE())),
+        'Loan_default'[Year] = YEAR(MAX('Loan_default'[Loan_Date_MM_DD_YYYY])) - 1),
+    CALCULATE(COUNTROWS(FILTER('Loan_default', 'Loan_default'[Default] = TRUE())),
+        'Loan_default'[Year] = YEAR(MAX('Loan_default'[Loan_Date_MM_DD_YYYY])) - 1), 0
+) * 100
+ 
+YOY Loan Amount Change =
+DIVIDE(
+    CALCULATE(SUM('Loan_default'[LoanAmount]),
+        'Loan_default'[Year] = YEAR(MAX('Loan_default'[Loan_Date_MM_DD_YYYY]))) -
+    CALCULATE(SUM('Loan_default'[LoanAmount]),
+        'Loan_default'[Year] = YEAR(MAX('Loan_default'[Loan_Date_MM_DD_YYYY])) - 1),
+    CALCULATE(SUM('Loan_default'[LoanAmount]),
+        'Loan_default'[Year] = YEAR(MAX('Loan_default'[Loan_Date_MM_DD_YYYY])) - 1), 0
+) * 100
+ 
+YTD Loan Amount =
+CALCULATE(
+    SUM('Loan_default'[LoanAmount]),
+    DATESYTD('Loan_default'[Loan_Date_MM_DD_YYYY].[Date]),
+    ALLEXCEPT('Loan_default', Loan_default[Credit Score Bins], Loan_default[MaritalStatus])
+)
+ 
+// ---------- Aggregations & Risk Metrics ----------
+
+Average Loan Amt (High Credit) =
+AVERAGEX(FILTER('Loan_default', 'Loan_default'[Credit Score Bins] = "High"), 'Loan_default'[LoanAmount])
+ 
+Loans by Education Type =
+COUNTROWS(FILTER('Loan_default', NOT(ISBLANK('Loan_default'[LoanID]))))
+ 
+Median by Credit Score Bins =
+MEDIANX('Loan_default', 'Loan_default'[LoanAmount])
+ 
+Total Loan (Credit Category) Adult = 
+CALCULATE(
+    SUM(Loan_default[LoanAmount]), Loan_default[Age Group]="Adult", 
+    ALLEXCEPT('Loan_default', Loan_default[Age], Loan_default[Age Group], Loan_default[CreditScore], Loan_default[Credit Score Bins]))
+ 
+Total Loan (Middle-Aged Adults) = 
+SUMX(FILTER('Loan_default', Loan_default[Age Group]="Middle-Aged Adult"), Loan_default[LoanAmount])
+ 
+Average Income by Employment Type =
+CALCULATE(AVERAGE('Loan_default'[Income]), ALLEXCEPT('Loan_default', 'Loan_default'[EmploymentType]))
+ 
+Average Loan by Age Group =
+AVERAGEX(VALUES('Loan_default'[Age Groups]), AVERAGE('Loan_default'[LoanAmount]))
+ 
+Loan Amount by Purpose =
+SUMX(FILTER('Loan_default', NOT(ISBLANK('Loan_default'[LoanAmount]))), 'Loan_default'[LoanAmount])
+ 
+Default Rate by Employment Type =
+VAR totalrecords = COUNTROWS(ALL('Loan_default'))
+VAR DefaultCases = COUNTROWS(FILTER('Loan_default', 'Loan_default'[Default] = TRUE()))
+RETURN
+    CALCULATE(DIVIDE(DefaultCases, totalrecords), ALLEXCEPT('Loan_default', 'Loan_default'[EmploymentType])) * 100
+ 
+Default Rate by Year =
+VAR total_loans = CALCULATE(COUNTROWS('Loan_default'), ALLEXCEPT('Loan_default', Loan_default[Year]))
+VAR default = CALCULATE(COUNTROWS(FILTER('Loan_default', 'Loan_default'[Default] = TRUE())), ALLEXCEPT('Loan_default', Loan_default[Year]))
+RETURN
+    DIVIDE(default, total_loans) * 100
