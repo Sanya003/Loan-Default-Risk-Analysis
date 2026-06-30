@@ -19,6 +19,8 @@ The end result is a 3-page interactive Power BI report built on a clean, type-co
 Data originates in a SQL Server database (`Loan.dbo.Loan_default`) and is staged through a **Power BI Dataflow**, which handles the upstream transformations before the dataset is loaded into the report layer. This keeps the heavy transformation logic centralized and reusable, rather than rebuilt every time the report is refreshed.
 
 The source data was clean, with no missing values or structural inconsistencies — the transformations below were applied purely to optimize data types and improve usability downstream.
+
+The Dataflow is configured with **scheduled refresh** on the full dataset to keep the report current, alongside **incremental refresh** partitioned on `Loan_Date_MM_DD_YYYY` — so historical data loads once and only new/changed records are refreshed going forward, keeping refresh times efficient as the dataset grows.
 <br>
 
 ## Data Cleaning & Transformation
